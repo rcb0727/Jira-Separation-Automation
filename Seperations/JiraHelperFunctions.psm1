@@ -146,7 +146,7 @@ function Update-JiraIssueStatus {
     param (
         [Parameter(Mandatory = $true)]
         [string]$issueKey,
-        [string]$targetStatusName = "" # Add Status type to transition ticket to
+        [string]$targetStatusName = "Done" # Add Status type to transition ticket to
     )
 
     # First, get available transitions for the issue
