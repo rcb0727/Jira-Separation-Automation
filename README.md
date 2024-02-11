@@ -56,6 +56,8 @@ Once all items are completed, ticket status is changed to next status and ticket
 
 Removes License from Office 365 Portal
 
+**Functions can be removed or added. Make sure to update Export-ModuleMember with new or removed functions. **
+
 **Links used: **
 
 JQL [JQL fields | Jira Service Management Cloud | Atlassian Support](https://support.atlassian.com/jira-service-management-cloud/docs/jql-fields/) 
