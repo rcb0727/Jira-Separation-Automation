@@ -74,10 +74,8 @@ Assigning Office licenses [user: assignLicense - Microsoft Graph v1.0 | Microsof
 
 Revoke user sessions in Azure [https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions?view=graph-rest-1.0&tabs=http](https://learn.microsoft.com/en-us/graph/api/user-revokesigninsessions?view=graph-rest-1.0&tabs=http)
 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/rcb0727)
-
 Authenticating Powershell Exchange via Certificate[https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps](https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps) 
 
 List of Office 365 sku's to be able to assign licenses[https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9](https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9)
 
-9
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/rcb0727)
