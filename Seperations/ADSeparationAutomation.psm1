@@ -7,7 +7,7 @@ $global:JiraApiBaseUrl = "https://Your_Jira_URL.net/rest/api/3"
 
 function Invoke-IssueProcessing {
     $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'" #Adjust Status and Request Type
-    $issueList = @()
+    $issueList = @() #Update Status and Request Type
 
     do {
         $url = "$global:JiraApiBaseUrl/search?jql=$jqlCriteria&startAt=$startAt&maxResults=$maxResults"
