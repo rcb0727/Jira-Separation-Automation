@@ -11,6 +11,7 @@ Update Function Update-JiraIssueStatus, add the status name to transition to
 ![image](https://github.com/rcb0727/Jira-Seperation-Automation/assets/130812613/3c652022-d49e-415d-bbfa-a423fe7c3f45)
 
 Update Jira URL in ADSpeparationAutomation
+
 ![image](https://github.com/rcb0727/Jira-Seperation-Automation/assets/130812613/d821f50a-d4ee-4083-aee8-707afeaba4ab)
 
 
