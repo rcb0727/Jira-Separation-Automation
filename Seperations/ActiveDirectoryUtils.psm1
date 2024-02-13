@@ -15,20 +15,22 @@ function GetADEmployeeDetails {
     param (
         [Parameter(Mandatory = $true)]
         [string]$employeeName,
-        [string]$jobTitle,
-        [string]$location
+        [string]$jobTitle = $null,
+        [string]$location = $null
     )
 
     try {
-        # Split the name to handle cases with and without middle names.
-        $nameParts = $employeeName -split ' '
+        $nameParts = $employeeName -split '\s+'
         $filter = "(&(objectClass=user)"
 
-        # Add name parts to filter. Handle users with just first and last names or with middle names.
+        # Construct filter for full name match.
         if ($nameParts.Count -ge 2) {
             $givenName = $nameParts[0]
             $surname = $nameParts[-1]
-            $filter += "(|(GivenName=*$givenName*)(Surname=*$surname*))"
+            $filter += "(&(GivenName=$givenName)(Surname=$surname))"
+        } elseif ($nameParts.Count -eq 1) {
+            # Handle scenario where only one name part is available (either first or last name).
+            $filter += "(|(GivenName=$nameParts[0])(Surname=$nameParts[0]))"
         }
 
         # Add job title and location to filter if provided.
@@ -44,6 +46,7 @@ function GetADEmployeeDetails {
         $adUser = Get-ADUser -LDAPFilter $filter -Properties "DisplayName", "EmailAddress", "MobilePhone", "Title", "Office", "Enabled"
 
         if ($adUser) {
+            # If multiple users are found, this might require additional logic to select the correct one.
             $firstEmail = $adUser.EmailAddress -split ', ' | Select-Object -First 1
             return @{
                 'Status' = if ($adUser.Enabled) { "enabled" } else { "disabled" }
@@ -71,6 +74,7 @@ function GetADEmployeeDetails {
         }
     }
 }
+
 
 
 
