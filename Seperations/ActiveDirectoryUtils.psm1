@@ -19,55 +19,55 @@ function GetADEmployeeDetails {
         [string]$location
     )
 
+    # Ensure name parts are trimmed to avoid leading/trailing spaces issues
+    $nameParts = $employeeName.Trim() -split '\s+'
+    $filter = "(&(objectClass=user)"
+
+    if ($nameParts.Count -ge 2) {
+        $givenName = $nameParts[0]
+        $surname = $nameParts[-1]
+        $filter += "(&(GivenName=$givenName)(sn=$surname))"
+    } else {
+        $filter += "(|(GivenName=$employeeName)(sn=$employeeName))"
+    }
+
+    if ($jobTitle) {
+        $filter += "(Title=*$jobTitle*)"
+    }
+    if ($location) {
+        $filter += "(physicalDeliveryOfficeName=*$location*)"
+    }
+
+    $filter += ")"
+
     try {
-        # Split the name to handle cases with and without middle names.
-        $nameParts = $employeeName -split ' '
-        $filter = "(&(objectClass=user)"
-
-        # Add name parts to filter. Handle users with just first and last names or with middle names.
-        if ($nameParts.Count -ge 2) {
-            $givenName = $nameParts[0]
-            $surname = $nameParts[-1]
-            $filter += "(|(GivenName=*$givenName*)(Surname=*$surname*))"
-        }
-
-        # Add job title and location to filter if provided.
-        if ($jobTitle) {
-            $filter += "(Title=*$jobTitle*)"
-        }
-        if ($location) {
-            $filter += "(Office=*$location*)"
-        }
-
-        $filter += ")"
-        
-        $adUser = Get-ADUser -LDAPFilter $filter -Properties "DisplayName", "EmailAddress", "MobilePhone", "Title", "Office", "Enabled"
+        $adUser = Get-ADUser -LDAPFilter $filter -Properties DisplayName, EmailAddress, MobilePhone, Title, Office, Enabled -ErrorAction Stop
 
         if ($adUser) {
-            $firstEmail = $adUser.EmailAddress -split ', ' | Select-Object -First 1
+            $email = $adUser.EmailAddress -split ', '| Select-Object -First 1
             return @{
-                'Status' = if ($adUser.Enabled) { "enabled" } else { "disabled" }
-                'Email' = $firstEmail
-                'Mobile' = $adUser.MobilePhone
-                'JobTitle' = $adUser.Title
-                'Location' = $adUser.Office
+                Status = if ($adUser.Enabled) { "enabled" } else { "disabled" }
+                Email = $email
+                Mobile = $adUser.MobilePhone
+                JobTitle = $adUser.Title
+                Location = $adUser.Office
             }
         } else {
             return @{
-                'Status' = "not found in AD"
-                'Email' = $null
-                'Mobile' = $null
-                'JobTitle' = $null
-                'Location' = $null
+                Status = "not found in AD"
+                Email = $null
+                Mobile = $null
+                JobTitle = $null
+                Location = $null
             }
         }
     } catch {
         return @{
-            'Status' = "Error accessing AD: $($_.Exception.Message)"
-            'Email' = $null
-            'Mobile' = $null
-            'JobTitle' = $null
-            'Location' = $null
+            Status = "Error accessing AD: $($_.Exception.Message)"
+            Email = $null
+            Mobile = $null
+            JobTitle = $null
+            Location = $null
         }
     }
 }
