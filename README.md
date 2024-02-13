@@ -91,6 +91,6 @@ List of Office 365 sku's to be able to assign licenses[https://gist.github.com/m
 
 **UPDATES**
 
-- 2/13/24 Adjusted Function GetADEmployeeDetails. Previous version was just checking for first name from Jira issue to check against Activie Directory. New version ensures both first name and last name match getting correct AD match. 
+- 2/13/24 Adjusted Function GetADEmployeeDetails. Previous version was just checking for first name from Jira issue to check against Active Directory. New version ensures both first name and last name match getting correct AD match. 
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/rcb0727)
