@@ -88,7 +88,9 @@ Authenticating Powershell Exchange via Certificate[https://learn.microsoft.com/e
 
 List of Office 365 sku's to be able to assign licenses[https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9](https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9)
 
+
 **UPDATES**
-2/13/24 Adjusted Function GetADEmployeeDetails. Previous version was just checking for first name from Jira issue to check against Activie Directory. New version ensures both first name and last name match getting correct AD match. 
+
+- 2/13/24 Adjusted Function GetADEmployeeDetails. Previous version was just checking for first name from Jira issue to check against Activie Directory. New version ensures both first name and last name match getting correct AD match. 
 
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/rcb0727)
