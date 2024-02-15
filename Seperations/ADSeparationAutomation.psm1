@@ -26,20 +26,24 @@ function Invoke-IssueProcessing {
                 $intuneDeviceDetails = if ($adEmployeeDetails.Email) { Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email } else { "No Mobile Device found for $employeeName" }
                 $computerInfo = FindComputerByEmployeeName -employeeName $employeeName
                 
-                # Check litigation hold status
-                $litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
-                $licenseAdjusted = $false
+                                # Check litigation hold status and act accordingly
+$litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
+$licenseAdjusted = $false
 
-                if (-not $litigationHoldStatus) {
-                    # Check and assign licenses only if litigation hold is not enabled
-                    $licenseAdjustmentResult = CheckAndAssignLicense -emailAddress $adEmployeeDetails.Email
-                    $licenseAdjusted = $true
+if (-not $litigationHoldStatus) {
+    # Check and assign licenses only if litigation hold is not enabled
+    $licenseAdjustmentResult = CheckAndAssignLicense -emailAddress $adEmployeeDetails.Email
+    if ($licenseAdjustmentResult) {
+        $licenseAdjusted = $true
+    }
 
-                    # Enable litigation hold after license assignment
-                    EnableLitigationHold -emailAddress $adEmployeeDetails.Email
-                }
+    # Enable litigation hold if not already enabled or if license adjustment was successful
+    $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
+} else {
+    Write-Host "Litigation hold is already enabled."
 
-                $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
+    $enableLitigationHoldResult = $true
+}
 
                 # General Comment Collecting Details
                 $generalComment = @"
