@@ -1,4 +1,4 @@
-﻿# MicrosoftGraphAPI
+# MicrosoftGraphAPI
 
 # Authentication for Microsoft Graph API
 function Get-IntuneAccessToken {
@@ -99,20 +99,26 @@ function Enable-LostMode {
 
     $body = @{
         "message" = "Please contact Help Desk - Refer to $issueKey"  # Custom message
-        "phoneNumber" = "323-340-4516"  # phone number
+        "phoneNumber" = ""  # phone number
     } | ConvertTo-Json
 
     try {
-        Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $body
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $body
         return "Lost mode enabled for device $managedDeviceId with message: 'Please contact Help Desk - Refer to $issueKey'"
     } catch {
-        $responseError = $_.Exception.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($responseError)
-        $responseBody = $reader.ReadToEnd() | ConvertFrom-Json
-        $errorMessage = $responseBody.error.message
-        Write-Warning "Failed to enable lost mode: $errorMessage"
+        if ($_.Exception -is [Microsoft.PowerShell.Commands.HttpResponseException]) {
+            # If the exception is an HTTP response exception, you can access the error details directly
+            $errorResponse = $_.Exception.ErrorDetails.Message | ConvertFrom-Json
+            $errorMessage = $errorResponse.error.message
+            Write-Warning "Failed to enable lost mode: $errorMessage"
+        } else {
+            # For other types of exceptions, just output the exception message
+            Write-Warning "Failed to enable lost mode: $($_.Exception.Message)"
+        }
     }
 }
+
+
 
 # Function to check and assign license
 function CheckAndAssignLicense {
@@ -240,6 +246,7 @@ function EnableLitigationHold {
     param (
         [Parameter(Mandatory = $true)]
         [string]$emailAddress,
+        [string]$IssueKey,
         [switch]$Quiet
     )
 
@@ -247,16 +254,22 @@ function EnableLitigationHold {
     
     try {
         if (-not $Quiet) {
-            Write-Output "Enabling litigation hold."
+            Write-Host "Enabling litigation hold for $emailAddress."
         }
-        Set-Mailbox -Identity $emailAddress -LitigationHoldEnabled $true
-        # Litigation hold has been enabled successfully
+
+        $retentionComment = "Related to Jira issue $IssueKey."
+        $retentionUrl = "Your_Jira_URL/browse/$IssueKey"
+
+        Set-Mailbox -Identity $emailAddress -LitigationHoldEnabled $true -RetentionComment $retentionComment -RetentionUrl $retentionUrl
+
+        if (-not $Quiet) {
+            Write-Host "Litigation hold successfully enabled for $emailAddress."
+        }
         return $true
     } catch {
         if (-not $Quiet) {
-            Write-Output "Failed to enable litigation hold. Error: $($_.Exception.Message)"
+            Write-Host "Failed to enable litigation hold for $emailAddress. Error: $($_.Exception.Message)"
         }
-        # Failed to enable litigation hold
         return $false
     } finally {
         DisconnectFromExchangeOnline
