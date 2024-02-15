@@ -1,13 +1,14 @@
-﻿# JiraAPI Module
+# JiraAPI Module
 Import-Module 'C:\Scripts\Seperations\JiraHelperFunctions.psm1' -Force
 Import-Module 'C:\Scripts\Seperations\MicrosoftGraphAPI.psm1' -Force
+Import-Module 'C:\Scripts\Seperations\ActiveDirectoryUtils.psm1' -Force
 
 # Global Variables
-$global:JiraApiBaseUrl = "https://Your_Jira_URL.net/rest/api/3"
+$global:JiraApiBaseUrl = "Your_Jira_URL/rest/api/3"
 
 function Invoke-IssueProcessing {
-    $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'" #Adjust Status and Request Type
-    $issueList = @() #Update Status and Request Type
+    $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'"
+    $issueList = @()
 
     do {
         $url = "$global:JiraApiBaseUrl/search?jql=$jqlCriteria&startAt=$startAt&maxResults=$maxResults"
@@ -38,11 +39,10 @@ function Invoke-IssueProcessing {
                     EnableLitigationHold -emailAddress $adEmployeeDetails.Email
                 }
 
-                $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -Quiet
+                $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
 
-# General Comment Collecting Details
-                
-$generalComment = @"
+                # General Comment Collecting Details
+                $generalComment = @"
 AD Status: $($adEmployeeDetails.Status)
 Email: $($adEmployeeDetails.Email)
 Mobile Number: $($adEmployeeDetails.Mobile)
@@ -65,26 +65,36 @@ Litigation Hold: $enableLitigationHoldResult
                 # Actions based on effective date
                 $effectiveDateTime = Get-EffectiveDateTime -effectiveDate $effectiveDate -offsetHours $config.effectiveDateTimeOffsetHours
                 
-                if (-not $litigationHoldStatus -and $adEmployeeDetails.Status -eq "enabled" -and (Get-Date) -ge $effectiveDateTime) {
-                    $disableResult = DisableAdAccountOnEffectiveDate -employeeName $employeeName -effectiveDate $effectiveDate
-                    $computerDisableResult = DisableComputer -employeeName $employeeName
-                    $signInSessionRevokeResult = RevokeGraphSignInSessions -emailAddress $adEmployeeDetails.Email
-                    $lostModeResult = Enable-LostMode -managedDeviceId (Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email).split(',')[0] -issueKey $issue.key
+                if ($effectiveDateTime -and $adEmployeeDetails.Status -eq "enabled" -and (Get-Date) -ge $effectiveDateTime) {
+                    Write-Host "Processing actions based on effective date for employee: $employeeName"
+                    try {
+                        # Call the function without the effectiveDate parameter
+                        $disableResult = DisableAdAccountOnEffectiveDate -employeeName $employeeName
+                        $computerDisableResult = DisableComputer -employeeName $employeeName
+                        $signInSessionRevokeResult = RevokeGraphSignInSessions -emailAddress $adEmployeeDetails.Email
+                        $lostModeResult = Enable-LostMode -managedDeviceId (Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email).split(',')[0] -issueKey $issue.key
+                        
 
-                    # Combine comments regarding disabling account
-                    $combinedComment = "$($disableResult.Result) - $($disableResult.Message)`r`nComputer actions: $computerDisableResult`r`nSign-in sessions revoked: $signInSessionRevokeResult`r`nLost mode enabled: $lostModeResult"
-                    Send-JiraComment -issueKey $issue.key -commentContent $combinedComment
-                    $disableCommentAdded = $true
+                        # Combine comments regarding disabling account
+                        $combinedComment = "$($disableResult.Result) - $($disableResult.Message)`r`nComputer actions: $computerDisableResult`r`nSign-in sessions revoked: $signInSessionRevokeResult`r`nLost mode enabled: $lostModeResult"
+                        Send-JiraComment -issueKey $issue.key -commentContent $combinedComment
+                        $disableCommentAdded = $true
+                    } catch {
+                        Write-Host "Error occurred in actions based on effective date: $_"
+                        
+                    }
                 }
                 
                 # Check if combined comment was added successfully
                 if ($disableCommentAdded -eq $true) {
                     # Update issue status and assign it
                     try {
-                        Update-JiraIssueStatus -issueKey $issue.key
+                        Update-JiraIssueStatusToFLConnect -issueKey $issue.key
                         AssignJiraIssueToUser -issueKey $issue.key
+                        RemoveLicense -emailAddress $adEmployeeDetails.Email
                     } catch {
                         Write-Host "Failed to update status and assign issue $issue.key. Error: $($_.Exception.Message)"
+                        
                     }
                 }
 
