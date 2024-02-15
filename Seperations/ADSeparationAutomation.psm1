@@ -40,7 +40,6 @@ if (-not $litigationHoldStatus) {
     # Enable litigation hold if not already enabled or if license adjustment was successful
     $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
 } else {
-    Write-Host "Litigation hold is already enabled."
 
     $enableLitigationHoldResult = $true
 }
