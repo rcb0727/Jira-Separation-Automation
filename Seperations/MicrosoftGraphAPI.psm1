@@ -138,17 +138,14 @@ function CheckAndAssignLicense {
         "Content-Type" = "application/json"
     }
 
-    # Correctly define SKU IDs for F3 and E3 licenses based on the config
     $F3SkuId = $config.F3SkuId
     $E3SkuId = $config.E3SkuId
 
-    # Check current licenses
     $uriGetLicenses = "https://graph.microsoft.com/v1.0/users/$emailAddress/licenseDetails"
     try {
         $currentLicensesResponse = Invoke-RestMethod -Method Get -Uri $uriGetLicenses -Headers $headers
         $currentLicenses = $currentLicensesResponse.value
         
-        # Accurately check for F3 and E3 license presence
         $hasF3 = $currentLicenses.skuId -contains $F3SkuId
         $hasE3 = $currentLicenses.skuId -contains $E3SkuId
 
@@ -161,11 +158,9 @@ function CheckAndAssignLicense {
             $uriAssignLicense = "https://graph.microsoft.com/v1.0/users/$emailAddress/assignLicense"
 
             Invoke-RestMethod -Method Post -Uri $uriAssignLicense -Headers $headers -Body $body
-            Write-Host "Successfully switched from F3 to E3 for $emailAddress. Waiting for changes to propagate."
+            Write-Host "Successfully switched from F3 to E3."
             
-            # Set global variable to indicate E3 license assignment
             $Global:LicenseChanged = $true
-            
             # Wait with progress display
             $duration = 360 # 6 minutes
             $startTime = Get-Date
@@ -182,16 +177,21 @@ function CheckAndAssignLicense {
         } elseif ($hasE3) {
             Write-Host "$emailAddress already has an E3 license."
         } else {
-            Write-Host "$emailAddress does not have an F3 license to switch."
+            Write-Host "$emailAddress does not have an F3 license or already has an E3 license. No action required."
         }
 
     } catch {
-        Write-Warning "Failed to check or switch licenses for $emailAddress. Error: $($_.Exception.Message)"
+        $errorResponse = $_.ErrorDetails.Message
+        if ($errorResponse -match "does not have any available licenses") {
+            return "No available E3 licenses to assign."
+        } else {
+            Write-Warning "Failed to check or switch licenses for $emailAddress. Error: $errorResponse"
+        }
     }
 
-    # Proceed to check and enable litigation hold as necessary
     CheckLitigationHoldStatus -emailAddress $emailAddress
 }
+
 
 
 # Function to connect to Exchange Online
@@ -224,7 +224,7 @@ function CheckLitigationHoldStatus {
     
     try {
         $mailbox = Get-Mailbox -Identity $emailAddress -ErrorAction Stop
-        Write-Host "Checking litigation hold status for $emailAddress."
+        Write-Host "Checking litigation hold status."
     
         if (-not $mailbox.LitigationHoldEnabled) {
             Write-Host "Litigation hold is not enabled."
@@ -257,7 +257,7 @@ function EnableLitigationHold {
             Write-Host "Enabling litigation hold for $emailAddress."
         }
 
-        $retentionComment = "Related to Jira issue $IssueKey."
+        $retentionComment = "Lit hold for separation purposes. Related to Jira issue $IssueKey."
         $retentionUrl = "Your_Jira_URL/browse/$IssueKey"
 
         Set-Mailbox -Identity $emailAddress -LitigationHoldEnabled $true -RetentionComment $retentionComment -RetentionUrl $retentionUrl
@@ -310,8 +310,6 @@ function RevertLicenseAfterLitigationHold {
         }
         Write-Progress -Activity "Waiting for propagation..." -Completed
 
-        Write-Host "Initiating license reversion from E3 to F3 for $emailAddress..."
-
         $uriAssignLicense = "https://graph.microsoft.com/v1.0/users/$emailAddress/assignLicense"
         $body = @{
             "addLicenses" = @( @{ "skuId" = $config.F3SkuId } ) # F3 SKU ID from config
@@ -320,13 +318,46 @@ function RevertLicenseAfterLitigationHold {
 
         try {
             $response = Invoke-RestMethod -Method Post -Uri $uriAssignLicense -Headers $headers -Body $body
-            Write-Host "License successfully reverted from E3 to F3 for $emailAddress."
+            Write-Host "License successfully reverted from E3 to F3."
         } catch {
             $errorMessage = $_.Exception.Message
-            Write-Warning "Failed to revert license for $emailAddress. Error: $errorMessage"
+            Write-Warning "Failed to revert license. Error: $errorMessage"
         }
     } else {
-        Write-Host "No license change detected for $emailAddress, skipping reversion."
+        Write-Host "No license change detected, skipping reversion."
+    }
+}
+
+# Function to block user sign-in
+function BlockUserSignIn {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$emailAddress
+    )
+
+    $accessToken = Get-IntuneAccessToken
+    if (-not $accessToken) {
+        Write-Host "Failed to obtain access token."
+        return
+    }
+
+    $headers = @{
+        "Authorization" = "Bearer $accessToken"
+        "Content-Type" = "application/json"
+    }
+
+    $uri = "https://graph.microsoft.com/v1.0/users/$emailAddress"
+
+    $body = @{
+        accountEnabled = $false
+    } | ConvertTo-Json
+
+    try {
+        Invoke-RestMethod -Uri $uri -Headers $headers -Method PATCH -Body $body
+        Write-Host "User sign-in has been blocked for $emailAddress"
+    }
+    catch {
+        Write-Warning "Failed to block user sign-in for $emailAddress. Error: $($_.Exception.Message)"
     }
 }
 
@@ -368,5 +399,5 @@ function RemoveLicense {
     }
 }
 
-Export-ModuleMember -Function 'Get-IntuneAccessToken', 'Get-IntuneDeviceDetails', 'RevokeGraphSignInSessions', 'Enable-LostMode', 'CheckLitigationHoldStatus', 'EnableLitigationHold', 'CheckAndAssignLicense','RevertLicenseAfterLitigationHold', 'RemoveLicense'
+Export-ModuleMember -Function 'Get-IntuneAccessToken', 'Get-IntuneDeviceDetails', 'RevokeGraphSignInSessions', 'Enable-LostMode', 'CheckLitigationHoldStatus', 'EnableLitigationHold', 'CheckAndAssignLicense','RevertLicenseAfterLitigationHold', 'RemoveLicense', 'BlockUserSignIn'
 
