@@ -32,7 +32,7 @@ function Invoke-IssueProcessing {
                     Send-JiraComment -issueKey $issue.key -commentContent $commentContent
                     
                     # Update issue status and assign it
-                    Update-JiraIssueStatusToFLConnect -issueKey $issue.key
+                    Update-JiraIssueStatus -issueKey $issue.key
                     AssignJiraIssueToUser -issueKey $issue.key
                     
                     Write-Host "No AD user found for $employeeName, issue $issue.key updated and assigned."
@@ -138,7 +138,7 @@ if ($litigationHoldUpdated) {
                 if ($disableCommentAdded -eq $true) {
                     # Update issue status and assign it
                     try {
-                        Update-JiraIssueStatusToFLConnect -issueKey $issue.key
+                        Update-JiraIssueStatus -issueKey $issue.key
                         AssignJiraIssueToUser -issueKey $issue.key
                         RemoveLicense -emailAddress $adEmployeeDetails.Email
                     } catch {
