@@ -73,7 +73,6 @@ function GetADEmployeeDetails {
 }
 
 
-
 # Function to find a computer by employee name in the description in AD
 function FindComputerByEmployeeName {
     param (
@@ -174,8 +173,35 @@ function DisableComputer {
         return "$($_.Exception.Message)"
     }
 }
+# Function to move an AD user to the Disabled Accounts OU
+function MoveADUserToDisabledOU {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$employeeName
+    )
+
+    try {
+        # Correct distinguished name for the Disabled Accounts OU
+        $disabledAccountsOU = "OU=_Disabled Accounts_,DC=Microsoft,DC=com"
+
+        # Get the AD user object
+        $adUser = Get-ADUser -Filter "Name -like '*$employeeName*'" -ErrorAction SilentlyContinue
+
+        if ($adUser) {
+            Write-Host "Found AD user: $($adUser.Name)"
+            # Move the user to the Disabled Accounts OU
+            Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $disabledAccountsOU -ErrorAction SilentlyContinue
+            Write-Host "$employeeName has been moved to the Disabled Accounts OU."
+        } else {
+            Write-Host "AD account for $employeeName not found."
+        }
+    } catch {
+        Write-Host "Error encountered in MoveADUserToDisabledOU: $($_.Exception.Message)"
+        
+    }
+}
 
 
-
-Export-ModuleMember -Function 'GetADEmployeeDetails', 'FindComputerByEmployeeName', 'GetADEmployeeGroups', 'DisableAdAccountOnEffectiveDate', 'DisableComputer', 'Get-EffectiveDateTime'
+# Including the new function in the module export list
+Export-ModuleMember -Function 'GetADEmployeeDetails', 'FindComputerByEmployeeName', 'GetADEmployeeGroups', 'DisableAdAccountOnEffectiveDate', 'DisableComputer', 'Get-EffectiveDateTime', 'MoveADUserToDisabledOU'
 
