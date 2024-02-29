@@ -64,6 +64,8 @@ Once all items are completed, ticket status is changed to next status and ticket
 
 Removes License from Office 365 Portal
 
+Moves Users AD Account to OU of choice.
+
 **Functions can be removed or added. Make sure to update Export-ModuleMember with new or removed functions. **
 
 **Links used: **
