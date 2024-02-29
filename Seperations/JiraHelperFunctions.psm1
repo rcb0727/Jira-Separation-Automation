@@ -1,4 +1,4 @@
-﻿##Jira Helper Functions
+##Jira Helper Functions
 
 
 
@@ -141,12 +141,12 @@ function Send-JiraComment {
     }
 }
 
-#Update the status of a Jira issue
+#Update the status of a Jira issue to "Done"
 function Update-JiraIssueStatus {
     param (
         [Parameter(Mandatory = $true)]
         [string]$issueKey,
-        [string]$targetStatusName = "Done" # Add Status type to transition ticket to
+        [string]$targetStatusName = "Done"
     )
 
     # First, get available transitions for the issue
@@ -209,31 +209,44 @@ function UpdateJiraIssueCustomFields {
         [string]$department
     )
 
-    $headers = @{
-        "Authorization" = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$($global:JiraUsername):$($global:JiraApiToken)"))
-        "Content-Type" = "application/json"
-    }
-
     # First, get the current issue details to check existing values
     $issueDetailsUrl = "$global:JiraApiBaseUrl/issue/$issueKey"
-    $currentIssueDetails = Invoke-RestMethod -Uri $issueDetailsUrl -Method Get -Headers $headers
-    $currentEmployeeName = $currentIssueDetails.fields.customfield_10163
-    $currentLocation = $currentIssueDetails.fields.customfield_10054.value
-    $currentDepartment = $currentIssueDetails.fields.customfield_10055.value
+    try {
+        $currentIssueDetails = Invoke-RestMethod -Uri $issueDetailsUrl -Method Get -Headers $headers
+    
+    } catch {
+        Write-Host "Failed to retrieve issue details for $issueKey $($_.Exception.Message)"
+        return
+    }
 
+    # Initialize update body
     $body = @{ "fields" = @{} }
 
-    if ($currentEmployeeName -ne $employeeName) {
-        $body.fields.customfield_10163 = $employeeName
-    }
-    if ($currentLocation -ne $location) {
-        $body.fields.customfield_10054 = @{ "value" = $location }
-    }
-    if ($currentDepartment -ne $department) {
-        $body.fields.customfield_10055 = @{ "value" = $department }
+    # Update Employee Name if it exists and is different
+    if ($currentIssueDetails.fields.PSObject.Properties.Name -contains 'customfield_10163' -and $employeeName -ne "") {
+        $currentEmployeeName = $currentIssueDetails.fields.customfield_10163
+        if ($currentEmployeeName -ne $employeeName) {
+            $body.fields.customfield_10163 = $employeeName
+        }
     }
 
-    # Check if there are fields to update
+    # Update Location if it exists and is different
+    if ($currentIssueDetails.fields.PSObject.Properties.Name -contains 'customfield_10054' -and $location -ne "") {
+        $currentLocation = $currentIssueDetails.fields.customfield_10054.value
+        if ($currentLocation -ne $location) {
+            $body.fields.customfield_10054 = @{ "value" = $location }
+        }
+    }
+
+    # Update Department if it exists and is different
+    if ($currentIssueDetails.fields.PSObject.Properties.Name -contains 'customfield_10055' -and $department -ne "") {
+        $currentDepartment = $currentIssueDetails.fields.customfield_10055.value
+        if ($currentDepartment -ne $department) {
+            $body.fields.customfield_10055 = @{ "value" = $department }
+        }
+    }
+
+    # Execute the update if there are changes
     if ($body.fields.Count -gt 0) {
         $bodyJson = $body | ConvertTo-Json -Depth 10
         try {
@@ -241,11 +254,20 @@ function UpdateJiraIssueCustomFields {
             Write-Host "Custom fields updated successfully for issue $issueKey."
         } catch {
             Write-Host "Failed to update custom fields for issue $issueKey $($_.Exception.Message)"
+            if ($_.Exception.Response) {
+                $responseStream = $_.Exception.Response.GetResponseStream()
+                $reader = New-Object System.IO.StreamReader($responseStream)
+                $responseBody = $reader.ReadToEnd()
+                Write-Host "Response content: $responseBody"
+            }
         }
     } else {
         Write-Host "No custom fields updates required for issue $issueKey."
     }
 }
+
+
+
 
 
 Export-ModuleMember -Function Update-SummaryWithDate, Get-IssueDetails, Send-JiraComment, Update-JiraIssueStatus, AssignJiraIssueToUser, UpdateJiraIssueCustomFields
