@@ -4,7 +4,7 @@ Import-Module 'C:\Scripts\Seperations\MicrosoftGraphAPI.psm1' -Force
 Import-Module 'C:\Scripts\Seperations\ActiveDirectoryUtils.psm1' -Force
 
 # Global Variables
-$global:JiraApiBaseUrl = "Your_Jira_URL/rest/api/3"
+$global:JiraApiBaseUrl = "https://Your_Jira_URL/rest/api/3"
 
 function Invoke-IssueProcessing {
     $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'"
@@ -18,73 +18,119 @@ function Invoke-IssueProcessing {
             if ($issue) {
                 $details = Get-IssueDetails -issue $issue
                 $employeeName = $details["Employee Name"]
+                $location = $details["Location"] 
+                $department = $details["Department"] 
                 $effectiveDate = $details["Effective Date"]
                 $disableCommentAdded = $false
                 
                 # Fetch AD employee details
                 $adEmployeeDetails = GetADEmployeeDetails -employeeName $employeeName
+
+                if (-not $adEmployeeDetails.Email) {
+                    # If no AD user found, make a general comment and skip to status update and assignment
+                    $commentContent = "No Active Directory user found for $employeeName."
+                    Send-JiraComment -issueKey $issue.key -commentContent $commentContent
+                    
+                    # Update issue status and assign it
+                    Update-JiraIssueStatusToFLConnect -issueKey $issue.key
+                    AssignJiraIssueToUser -issueKey $issue.key
+                    
+                    Write-Host "No AD user found for $employeeName, issue $issue.key updated and assigned."
+                    continue
+                }
+
                 $intuneDeviceDetails = if ($adEmployeeDetails.Email) { Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email } else { "No Mobile Device found for $employeeName" }
                 $computerInfo = FindComputerByEmployeeName -employeeName $employeeName
                 
-                                # Check litigation hold status and act accordingly
+     # Update Custom fields: Employee Name, Department, Location
+     UpdateJiraIssueCustomFields -issueKey $issue.key -employeeName $employeeName -location $location -department $department
+            
+
+# Check litigation hold status
 $litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
+
+# Initially, assume the license is not adjusted
 $licenseAdjusted = $false
 
+# Check the litigation hold status first
 if (-not $litigationHoldStatus) {
-    # Check and assign licenses only if litigation hold is not enabled
+    # Check and possibly adjust the license, assuming this function returns a result or status
     $licenseAdjustmentResult = CheckAndAssignLicense -emailAddress $adEmployeeDetails.Email
-    if ($licenseAdjustmentResult) {
+    
+    # Determine if an E3 license is assigned and act based on that
+    if ($licenseAdjustmentResult -ne "No available E3 licenses to assign.") {
+        # Assume that not receiving the specific "no E3 licenses" message means we can proceed
         $licenseAdjusted = $true
+        $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
+        $litigationHoldComment = "Litigation Hold: Enabled based on E3 license assignment"
+    } else {
+        # Here, we directly address the "no E3 licenses available" scenario
+        $enableLitigationHoldResult = $false
+        $litigationHoldComment = "Litigation Hold: Not enabled - No available E3 licenses to assign."
     }
-
-    # Enable litigation hold if not already enabled or if license adjustment was successful
-    $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
+} elseif ($litigationHoldStatus) {
+    # If litigation hold is already set, we log that status
+    $litigationHoldComment = "Litigation Hold: Already enabled"
 } else {
-
-    $enableLitigationHoldResult = $true
+    # Catch-all for any other unexpected scenarios
+    $enableLitigationHoldResult = $false
+    $litigationHoldComment = "Litigation Hold: Not enabled - Unexpected condition."
 }
 
-                # General Comment Collecting Details
-                $generalComment = @"
+
+
+# General Comment Collecting Details
+$generalComment = @"
 AD Status: $($adEmployeeDetails.Status)
 Email: $($adEmployeeDetails.Email)
 Mobile Number: $($adEmployeeDetails.Mobile)
 $intuneDeviceDetails
 $computerInfo
-Litigation Hold: $enableLitigationHoldResult
+$litigationHoldComment
 "@
-                Send-JiraComment -issueKey $issue.key -commentContent $generalComment
+
+# Determine if a new comment about litigation hold needs to be posted
+if ($litigationHoldUpdated) {
+    # If there's an update, post only the litigation hold comment
+    Send-JiraComment -issueKey $issue.key -commentContent "$($newLitigationHoldComment)"
+} else {
+    # If no update, post the general comment with litigation hold status appended
+    Send-JiraComment -issueKey $issue.key -commentContent "$($generalComment)`n$($newLitigationHoldComment)"
+}
 
                 # AD Groups Comment
                 $adGroups = GetADEmployeeGroups -employeeName $employeeName
                 $adGroupsComment = "AD Groups: $adGroups"
                 Send-JiraComment -issueKey $issue.key -commentContent $adGroupsComment
 
-                # Revert license after litigation hold (if needed)
-                if (-not $litigationHoldStatus -and $licenseAdjusted) {
-                    $RevertLicenseAfterLitigationHold = RevertLicenseAfterLitigationHold -emailAddress $adEmployeeDetails.Email
-                }
 
-                # Actions based on effective date
+  # Revert license after litigation hold (if needed)
+  if (-not $litigationHoldStatus -and $licenseAdjusted) {
+    $RevertLicenseAfterLitigationHold = RevertLicenseAfterLitigationHold -emailAddress $adEmployeeDetails.Email
+}
+
+                
+
+                # Actions based on effective date or immediate action if already disabled
                 $effectiveDateTime = Get-EffectiveDateTime -effectiveDate $effectiveDate -offsetHours $config.effectiveDateTimeOffsetHours
                 
-                if ($effectiveDateTime -and $adEmployeeDetails.Status -eq "enabled" -and (Get-Date) -ge $effectiveDateTime) {
-                    Write-Host "Processing actions based on effective date for employee: $employeeName"
+                if ($adEmployeeDetails.Status -eq "disabled" -or ($effectiveDateTime -and (Get-Date) -ge $effectiveDateTime)) {
+                    $actionNote = if ($adEmployeeDetails.Status -eq "disabled") { "Employee account already disabled. Processing Separation." } else { "Processing actions based on effective date for employee: $employeeName" }
+                    Write-Host $actionNote
                     try {
-                        # Call the function without the effectiveDate parameter
+                        # Immediate actions for disabled account or actions based on effective date
                         $disableResult = DisableAdAccountOnEffectiveDate -employeeName $employeeName
                         $computerDisableResult = DisableComputer -employeeName $employeeName
                         $signInSessionRevokeResult = RevokeGraphSignInSessions -emailAddress $adEmployeeDetails.Email
                         $lostModeResult = Enable-LostMode -managedDeviceId (Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email).split(',')[0] -issueKey $issue.key
-                        
+                        $BlockSigninResult = BlockUserSignIn -emailAddress $adEmployeeDetails.Email
 
-                        # Combine comments regarding disabling account
-                        $combinedComment = "$($disableResult.Result) - $($disableResult.Message)`r`nComputer actions: $computerDisableResult`r`nSign-in sessions revoked: $signInSessionRevokeResult`r`nLost mode enabled: $lostModeResult"
+                        # Combine comments regarding account actions
+                        $combinedComment = "$($disableResult.Result) - $($disableResult.Message)`r`nComputer actions: $computerDisableResult`r`nSign-in sessions revoked: $signInSessionRevokeResult`r`nLost mode enabled: $lostModeResult`r`nBlocked Sign: $BlockSigninResult"
                         Send-JiraComment -issueKey $issue.key -commentContent $combinedComment
                         $disableCommentAdded = $true
                     } catch {
-                        Write-Host "Error occurred in actions based on effective date: $_"
-                        
+                        Write-Host "Error occurred in processing actions: $_"
                     }
                 }
                 
@@ -97,7 +143,6 @@ Litigation Hold: $enableLitigationHoldResult
                         RemoveLicense -emailAddress $adEmployeeDetails.Email
                     } catch {
                         Write-Host "Failed to update status and assign issue $issue.key. Error: $($_.Exception.Message)"
-                        
                     }
                 }
 
