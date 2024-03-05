@@ -27,27 +27,32 @@ function Get-IntuneDeviceDetails {
     )
 
     $accessToken = Get-IntuneAccessToken
+    if (-not $accessToken) {
+        return "Failed to obtain access token."
+    }
+
     $headers = @{
         "Authorization" = "Bearer $accessToken"
         "Accept" = "application/json"
     }
 
-    $uri = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=userPrincipalName eq '$emailAddress' and operatingSystem eq 'iOS'&`$select=deviceName,serialNumber"
+    $uri = "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?`$filter=userPrincipalName eq '$emailAddress' and operatingSystem eq 'iOS'&`$select=id,deviceName,serialNumber"
 
     try {
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
-        if ($response.value.Count -gt 0) {
-            $deviceDetails = @()
-            foreach ($device in $response.value) {
-                $deviceDetails += "$($device.deviceName), Serial Number: $($device.serialNumber)"
+        $deviceDetails = @()
+        foreach ($device in $response.value) {
+            $deviceDetails += @{
+                "DeviceName" = $device.deviceName
+                "SerialNumber" = $device.serialNumber
+                "ManagedDeviceId" = $device.id
             }
-            if ($deviceDetails.Count -eq 0) {
-                return "No iOS devices found in Intune for email: $emailAddress"
-            } else {
-                return $deviceDetails -join "`r`n"
-            }
-        } else {
+        }
+
+        if ($deviceDetails.Count -eq 0) {
             return "No iOS devices found in Intune for email: $emailAddress"
+        } else {
+            return $deviceDetails
         }
     } catch {
         return "Failed to get iOS device details: $($_.Exception.Message)"
@@ -104,17 +109,17 @@ function Enable-LostMode {
 
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $body
-        return "Lost mode enabled for device $managedDeviceId with message: 'Please contact Help Desk - Refer to $issueKey'"
+        Write-Host "Lost mode enabled for device $managedDeviceId with message: 'Please contact Help Desk - Refer to $issueKey'"
+        return $true
     } catch {
         if ($_.Exception -is [Microsoft.PowerShell.Commands.HttpResponseException]) {
-            # If the exception is an HTTP response exception, you can access the error details directly
             $errorResponse = $_.Exception.ErrorDetails.Message | ConvertFrom-Json
             $errorMessage = $errorResponse.error.message
             Write-Warning "Failed to enable lost mode: $errorMessage"
         } else {
-            # For other types of exceptions, just output the exception message
             Write-Warning "Failed to enable lost mode: $($_.Exception.Message)"
         }
+        return $false
     }
 }
 
@@ -328,8 +333,41 @@ function RevertLicenseAfterLitigationHold {
     }
 }
 
-# Function to block user sign-in
 function BlockUserSignIn {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$emailAddress
+    )
+
+    $accessToken = Get-IntuneAccessToken
+    if (-not $accessToken) {
+        return $false
+    }
+
+    $headers = @{
+        "Authorization" = "Bearer $accessToken"
+        "Content-Type" = "application/json"
+    }
+
+    $uri = "https://graph.microsoft.com/v1.0/users/$emailAddress"
+
+    $body = @{
+        accountEnabled = $false
+    } | ConvertTo-Json
+
+    try {
+        Invoke-RestMethod -Uri $uri -Headers $headers -Method PATCH -Body $body
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+
+
+#Removes Office License
+function RemoveLicense {
     param (
         [Parameter(Mandatory = $true)]
         [string]$emailAddress
@@ -346,56 +384,39 @@ function BlockUserSignIn {
         "Content-Type" = "application/json"
     }
 
-    $uri = "https://graph.microsoft.com/v1.0/users/$emailAddress"
+    
+    $F3SkuId = $config.F3SkuId
+    $E3SkuId = $config.E3SkuId
 
-    $body = @{
-        accountEnabled = $false
-    } | ConvertTo-Json
-
+    $uriGetLicenses = "https://graph.microsoft.com/v1.0/users/$emailAddress/licenseDetails"
     try {
-        Invoke-RestMethod -Uri $uri -Headers $headers -Method PATCH -Body $body
-        Write-Host "User sign-in has been blocked for $emailAddress"
-    }
-    catch {
-        Write-Warning "Failed to block user sign-in for $emailAddress. Error: $($_.Exception.Message)"
-    }
-}
+        $currentLicensesResponse = Invoke-RestMethod -Method Get -Uri $uriGetLicenses -Headers $headers
+        $currentLicenses = $currentLicensesResponse.value
+        
+        $hasF3 = $currentLicenses.skuId -contains $F3SkuId
+        $hasE3 = $currentLicenses.skuId -contains $E3SkuId
 
-
-#Removes Office License
-function RemoveLicense {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$emailAddress
-    )
-
-    if ($Global:LicenseChanged -eq $true) {
-        $accessToken = Get-IntuneAccessToken
-        if (-not $accessToken) {
-            Write-Host "Failed to obtain access token."
-            return
+        # Determine which license to remove based on what the user has.
+        if ($hasF3) {
+            $licenseToRemove = $F3SkuId
+        } elseif ($hasE3) {
+            $licenseToRemove = $E3SkuId
         }
 
-        $headers = @{
-            "Authorization" = "Bearer $accessToken"
-            "Content-Type" = "application/json"
-        }
+        if ($licenseToRemove) {
+            $body = @{
+                "addLicenses" = @()
+                "removeLicenses" = @($licenseToRemove)
+            } | ConvertTo-Json
 
-        Write-Host "Initiating license removal for $emailAddress..."
-
-        if (UserHasLicense -emailAddress $emailAddress -skuId $config.E3SkuId) {
-            # Remove E3 license
-            RemoveLicenseFromUser -emailAddress $emailAddress -skuToRemove $config.E3SkuId
-            Write-Host "E3 license successfully removed for $emailAddress."
-        } elseif (UserHasLicense -emailAddress $emailAddress -skuId $config.F3SkuId) {
-            # Remove F3 license
-            RemoveLicenseFromUser -emailAddress $emailAddress -skuToRemove $config.F3SkuId
-            Write-Host "F3 license successfully removed for $emailAddress."
+            $uriAssignLicense = "https://graph.microsoft.com/v1.0/users/$emailAddress/assignLicense"
+            Invoke-RestMethod -Method Post -Uri $uriAssignLicense -Headers $headers -Body $body
+            Write-Host "License $licenseToRemove removed"
         } else {
-            Write-Host "No applicable license found for $emailAddress, skipping removal."
+            Write-Host "User does not have F3 or E3 license to remove."
         }
-    } else {
-        Write-Host "No license change detected for $emailAddress, skipping removal."
+    } catch {
+        Write-Error "Error retrieving or removing license for $emailAddress $($_.Exception.Message)"
     }
 }
 
