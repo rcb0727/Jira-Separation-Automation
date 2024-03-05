@@ -118,8 +118,25 @@ function DisableAdAccountOnEffectiveDate {
         [string]$employeeName
     )
 
+    # Ensure name parts are trimmed to avoid leading/trailing spaces issues
+    $nameParts = $employeeName.Trim() -split '\s+'
+    $filter = "(&(objectClass=user)"
+    
+    # Check if the employee name contains at least a first name and last name
+    if ($nameParts.Count -ge 2) {
+        $givenName = $nameParts[0]
+        $surname = $nameParts[-1]
+        $filter += "(&(GivenName=$givenName)(sn=$surname))"
+    } else {
+        # If only one part is found, assume it could be either the given name or the surname
+        $filter += "(|(GivenName=$employeeName)(sn=$employeeName))"
+    }
+    
+    $filter += ")"
+
     try {
-        $adUser = Get-ADUser -Filter "Name -like '*$employeeName*'" -Properties PrimaryGroup
+        $adUser = Get-ADUser -LDAPFilter $filter -Properties PrimaryGroup, DisplayName, EmailAddress, MobilePhone, Title, Office, Enabled
+
         if ($adUser -ne $null) {
             # Disable the AD account
             Set-ADUser -Identity $adUser -Enabled $false
@@ -129,7 +146,7 @@ function DisableAdAccountOnEffectiveDate {
             # Get the primary group
             $primaryGroup = Get-ADGroup -Identity $adUser.PrimaryGroup
 
-            # Remove from all groups except primary group
+            # Remove from all groups except the primary group
             Get-ADUser -Identity $adUser | Get-ADPrincipalGroupMembership | Where-Object { $_.DistinguishedName -ne $primaryGroup.DistinguishedName } | ForEach-Object { Remove-ADGroupMember -Identity $_ -Members $adUser -Confirm:$false }
 
             return @{
@@ -150,7 +167,6 @@ function DisableAdAccountOnEffectiveDate {
         }
     }
 }
-
 
 
 # Function to disable a computer account
@@ -182,13 +198,12 @@ function MoveADUserToDisabledOU {
 
     try {
         # Correct distinguished name for the Disabled Accounts OU
-        $disabledAccountsOU = "OU=_Disabled Accounts_,DC=Microsoft,DC=com"
+        $disabledAccountsOU = "OU=_Disabled Accounts_,DC=Microsoft,DC=Com"
 
         # Get the AD user object
         $adUser = Get-ADUser -Filter "Name -like '*$employeeName*'" -ErrorAction SilentlyContinue
 
         if ($adUser) {
-            Write-Host "Found AD user: $($adUser.Name)"
             # Move the user to the Disabled Accounts OU
             Move-ADObject -Identity $adUser.DistinguishedName -TargetPath $disabledAccountsOU -ErrorAction SilentlyContinue
             Write-Host "$employeeName has been moved to the Disabled Accounts OU."
