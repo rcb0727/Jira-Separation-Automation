@@ -4,7 +4,7 @@ Import-Module 'C:\Scripts\Seperations\MicrosoftGraphAPI.psm1' -Force
 Import-Module 'C:\Scripts\Seperations\ActiveDirectoryUtils.psm1' -Force
 
 # Global Variables
-$global:JiraApiBaseUrl = "https://Your_Jira_URL/rest/api/3"
+$global:JiraApiBaseUrl = "Your_Jira_URL/rest/api/3"
 
 function Invoke-IssueProcessing {
     $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'"
@@ -32,19 +32,37 @@ function Invoke-IssueProcessing {
                     Send-JiraComment -issueKey $issue.key -commentContent $commentContent
                     
                     # Update issue status and assign it
-                    Update-JiraIssueStatus -issueKey $issue.key
+                    Update-JiraIssueStatusToFLConnect -issueKey $issue.key
                     AssignJiraIssueToUser -issueKey $issue.key
                     
                     Write-Host "No AD user found for $employeeName, issue $issue.key updated and assigned."
                     continue
                 }
 
-                $intuneDeviceDetails = if ($adEmployeeDetails.Email) { Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email } else { "No Mobile Device found for $employeeName" }
+                $intuneDeviceDetails = if ($adEmployeeDetails.Email) {
+                    $deviceDetails = Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email
+                    
+                    if ($deviceDetails -is [string]) {
+                        # If a string is returned, it means no devices were found or there was an error.
+                        $deviceDetails
+                    } elseif ($deviceDetails -is [array] -and $deviceDetails.Count -gt 0) {
+                        # If an array is returned, process it to create a descriptive string.
+                        $info = $deviceDetails | ForEach-Object {
+                            "Device Name: $($_.DeviceName), Serial Number: $($_.SerialNumber)"
+                        }
+                        # Join all device information lines into a single string to return.
+                        $info -join "`r`n"
+                    } else {
+                        "No iOS devices found in Intune for email: $adEmployeeDetails.Email"
+                    }
+                } else {
+                    "No Mobile Device found for $employeeName"
+                }
+                
                 $computerInfo = FindComputerByEmployeeName -employeeName $employeeName
                 
      # Update Custom fields: Employee Name, Department, Location
      UpdateJiraIssueCustomFields -issueKey $issue.key -employeeName $employeeName -location $location -department $department
-            
 
 # Check litigation hold status
 $litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
@@ -96,10 +114,14 @@ if ($litigationHoldUpdated) {
                 $adGroupsComment = "AD Groups: $adGroups"
                 Send-JiraComment -issueKey $issue.key -commentContent $adGroupsComment
 
+
+
   # Revert license after litigation hold (if needed)
   if (-not $litigationHoldStatus -and $licenseAdjusted) {
     $RevertLicenseAfterLitigationHold = RevertLicenseAfterLitigationHold -emailAddress $adEmployeeDetails.Email
 }
+
+        
                 # Actions based on effective date or immediate action if already disabled
                 $effectiveDateTime = Get-EffectiveDateTime -effectiveDate $effectiveDate -offsetHours $config.effectiveDateTimeOffsetHours
                 
@@ -111,7 +133,7 @@ if ($litigationHoldUpdated) {
                         $disableResult = DisableAdAccountOnEffectiveDate -employeeName $employeeName
                         $computerDisableResult = DisableComputer -employeeName $employeeName
                         $signInSessionRevokeResult = RevokeGraphSignInSessions -emailAddress $adEmployeeDetails.Email
-                        $lostModeResult = Enable-LostMode -managedDeviceId (Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email).split(',')[0] -issueKey $issue.key
+                        $lostModeResult = Enable-LostMode -managedDeviceId $firstDeviceId -issueKey $issue.key
                         $BlockSigninResult = BlockUserSignIn -emailAddress $adEmployeeDetails.Email
 
                         # Combine comments regarding account actions
@@ -130,6 +152,7 @@ if ($litigationHoldUpdated) {
                         Update-JiraIssueStatus -issueKey $issue.key
                         AssignJiraIssueToUser -issueKey $issue.key
                         RemoveLicense -emailAddress $adEmployeeDetails.Email
+                        MoveADUserToDisabledOU -employeeName $employeeName
                     } catch {
                         Write-Host "Failed to update status and assign issue $issue.key. Error: $($_.Exception.Message)"
                     }
