@@ -133,7 +133,7 @@ if ($litigationHoldUpdated) {
                         $disableResult = DisableAdAccountOnEffectiveDate -employeeName $employeeName
                         $computerDisableResult = DisableComputer -employeeName $employeeName
                         $signInSessionRevokeResult = RevokeGraphSignInSessions -emailAddress $adEmployeeDetails.Email
-                        $lostModeResult = Enable-LostMode -managedDeviceId $firstDeviceId -issueKey $issue.key
+                        $lostModeResult = Enable-LostMode -managedDeviceId $deviceDetails.ManagedDeviceId -issueKey
                         $BlockSigninResult = BlockUserSignIn -emailAddress $adEmployeeDetails.Email
 
                         # Combine comments regarding account actions
