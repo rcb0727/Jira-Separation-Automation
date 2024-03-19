@@ -64,57 +64,33 @@ function Invoke-IssueProcessing {
      # Update Custom fields: Employee Name, Department, Location
      UpdateJiraIssueCustomFields -issueKey $issue.key -employeeName $employeeName -location $location -department $department
 
-# Check litigation hold status
-$litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
-# Initially, assume the license is not adjusted
-$licenseAdjusted = $false
-# Check the litigation hold status first
-if (-not $litigationHoldStatus) {
-    # Check and possibly adjust the license, assuming this function returns a result or status
-    $licenseAdjustmentResult = CheckAndAssignLicense -emailAddress $adEmployeeDetails.Email
-    
-    # Determine if an E3 license is assigned and act based on that
-    if ($licenseAdjustmentResult -ne "No available E3 licenses to assign.") {
-        # Assume that not receiving the specific "no E3 licenses" message means we can proceed
-        $licenseAdjusted = $true
-        $enableLitigationHoldResult = EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
-        $litigationHoldComment = "Litigation Hold: Enabled based on E3 license assignment"
-    } else {
-        # Here, we directly address the "no E3 licenses available" scenario
-        $enableLitigationHoldResult = $false
-        $litigationHoldComment = "Litigation Hold: Not enabled - No available E3 licenses to assign."
-    }
-} elseif ($litigationHoldStatus) {
-    # If litigation hold is already set, we log that status
-    $litigationHoldComment = "Litigation Hold: Already enabled"
-} else {
-    # Catch-all for any other unexpected scenarios
-    $enableLitigationHoldResult = $false
-    $litigationHoldComment = "Litigation Hold: Not enabled - Unexpected condition."
-}
-# General Comment Collecting Details
-$generalComment = @"
+                $litigationHoldStatus = CheckLitigationHoldStatus -emailAddress $adEmployeeDetails.Email
+                $licenseAdjusted = $false
+                if (-not $litigationHoldStatus) {
+                    $licenseAdjustmentResult = CheckAndAssignLicense -emailAddress $adEmployeeDetails.Email
+                    if ($licenseAdjustmentResult -ne "No available E3 licenses to assign.") {
+                        $licenseAdjusted = $true
+                        EnableLitigationHold -emailAddress $adEmployeeDetails.Email -IssueKey $issue.key -Quiet
+                        Send-JiraComment -issueKey $issue.key -commentContent "Litigation Hold: Enabled"
+                    } else {
+                        Send-JiraComment -issueKey $issue.key -commentContent "Litigation Hold: Not enabled - No available E3 licenses to assign."
+                    }
+                } elseif ($litigationHoldStatus) {
+                    Send-JiraComment -issueKey $issue.key -commentContent "Litigation Hold: Already enabled"
+                }
+
+                $generalComment = @"
 AD Status: $($adEmployeeDetails.Status)
 Email: $($adEmployeeDetails.Email)
 Mobile Number: $($adEmployeeDetails.Mobile)
 $intuneDeviceDetails
 $computerInfo
-$litigationHoldComment
 "@
-# Determine if a new comment about litigation hold needs to be posted
-if ($litigationHoldUpdated) {
-    # If there's an update, post only the litigation hold comment
-    Send-JiraComment -issueKey $issue.key -commentContent "$($newLitigationHoldComment)"
-} else {
-    # If no update, post the general comment with litigation hold status appended
-    Send-JiraComment -issueKey $issue.key -commentContent "$($generalComment)`n$($newLitigationHoldComment)"
-}
-                # AD Groups Comment
+                Send-JiraComment -issueKey $issue.key -commentContent $generalComment
+
                 $adGroups = GetADEmployeeGroups -employeeName $employeeName
                 $adGroupsComment = "AD Groups: $adGroups"
                 Send-JiraComment -issueKey $issue.key -commentContent $adGroupsComment
-
-
 
   # Revert license after litigation hold (if needed)
   if (-not $litigationHoldStatus -and $licenseAdjusted) {
