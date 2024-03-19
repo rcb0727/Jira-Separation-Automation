@@ -83,17 +83,20 @@ function FindComputerByEmployeeName {
     )
 
     # Ensure name parts are trimmed to avoid leading/trailing spaces issues
-    $nameParts = $employeeName.Trim() -split '\s+'
+    $inputNameParts = $employeeName.Trim() -split '\s+'
     $userFilter = "(&(objectClass=user)"
+    $searchNames = @()
 
-    if ($nameParts.Count -ge 2) {
-        $givenName = $nameParts[0]
-        $surname = $nameParts[-1]
-        # Check against displayName, GivenName, and sn (surname)
+    if ($inputNameParts.Count -ge 2) {
+        # If a full name is provided, use it for filtering and add both parts to searchNames
+        $givenName = $inputNameParts[0]
+        $surname = $inputNameParts[-1]
         $userFilter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
+        $searchNames += "$givenName $surname"
     } else {
-        # Check against GivenName, sn (surname), and displayName
+        # If only a single name part is provided, consider it could be either first or last name
         $userFilter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
+        $searchNames += $employeeName
     }
 
     $userFilter += ")"
@@ -101,11 +104,27 @@ function FindComputerByEmployeeName {
     try {
         $adUser = Get-ADUser -LDAPFilter $userFilter -Property DisplayName
         if ($adUser -ne $null) {
-            # Now search for computer objects with a description that includes the user's display name
-            $userDisplayName = $adUser.DisplayName
-            $computers = Get-ADComputer -Filter "Description -like '*$userDisplayName*'" -Property Name
-            if ($computers -ne $null) {
-                return $computers | ForEach-Object { $_.Name }
+            # Parse the display name for potential additional search terms
+            $displayNameParts = $adUser.DisplayName.Trim() -split '\s+'
+            if ($displayNameParts.Count -ge 2) {
+                $searchDisplayName = "$($displayNameParts[0]) $($displayNameParts[1])"
+                if (-not $searchNames.Contains($searchDisplayName)) {
+                    $searchNames += $searchDisplayName
+                }
+            } elseif ($displayNameParts.Count -eq 1 -and -not $searchNames.Contains($displayNameParts[0])) {
+                $searchNames += $displayNameParts[0]
+            }
+
+            $computersFound = @()
+            foreach ($name in $searchNames) {
+                $computers = Get-ADComputer -Filter "Description -like '$name*'" -Property Name
+                if ($computers -ne $null) {
+                    $computersFound += $computers
+                }
+            }
+
+            if ($computersFound.Count -gt 0) {
+                return $computersFound | Select-Object -Unique | ForEach-Object { $_.Name }
             } else {
                 return "No computers found in AD for the employee"
             }
