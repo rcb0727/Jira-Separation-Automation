@@ -74,7 +74,6 @@ function GetADEmployeeDetails {
     }
 }
 
-
 # Function to find a computer by employee name in the description in AD
 function FindComputerByEmployeeName {
     param (
@@ -185,16 +184,16 @@ function DisableAdAccountOnEffectiveDate {
     $nameParts = $employeeName.Trim() -split '\s+'
     $filter = "(&(objectClass=user)"
     
-    # Check if the employee name contains at least a first name and last name
     if ($nameParts.Count -ge 2) {
         $givenName = $nameParts[0]
         $surname = $nameParts[-1]
-        $filter += "(&(GivenName=$givenName)(sn=$surname))"
+        # Adapted logic to check against GivenName, sn (surname), and displayName
+        $filter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
     } else {
-        # If only one part is found, assume it could be either the given name or the surname
-        $filter += "(|(GivenName=$employeeName)(sn=$employeeName))"
+        # Adapted logic to check against GivenName, sn (surname), and displayName
+        $filter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
     }
-    
+
     $filter += ")"
 
     try {
@@ -232,6 +231,7 @@ function DisableAdAccountOnEffectiveDate {
 }
 
 
+
 # Function to disable a computer account
 function DisableComputer {
     param (
@@ -261,10 +261,26 @@ function MoveADUserToDisabledOU {
 
     try {
         # Correct distinguished name for the Disabled Accounts OU
-        $disabledAccountsOU = "OU=_Disabled Accounts_,DC=Microsoft,DC=Com"
+        $disabledAccountsOU = "OU=_Disabled Accounts_,DC=Your,DC=Domain"
 
-        # Get the AD user object
-        $adUser = Get-ADUser -Filter "Name -like '*$employeeName*'" -ErrorAction SilentlyContinue
+        # Ensure name parts are trimmed to avoid leading/trailing spaces issues
+        $nameParts = $employeeName.Trim() -split '\s+'
+        $filter = "(&(objectClass=user)"
+        
+        if ($nameParts.Count -ge 2) {
+            $givenName = $nameParts[0]
+            $surname = $nameParts[-1]
+            # Enhanced filter to check against displayName, GivenName, and sn (surname)
+            $filter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
+        } else {
+            # Enhanced filter to check against GivenName, sn (surname), and displayName
+            $filter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
+        }
+
+        $filter += ")"
+
+        # Get the AD user object with the refined filter
+        $adUser = Get-ADUser -LDAPFilter $filter -ErrorAction SilentlyContinue
 
         if ($adUser) {
             # Move the user to the Disabled Accounts OU
@@ -275,9 +291,9 @@ function MoveADUserToDisabledOU {
         }
     } catch {
         Write-Host "Error encountered in MoveADUserToDisabledOU: $($_.Exception.Message)"
-        
     }
 }
+
 
 
 # Including the new function in the module export list
