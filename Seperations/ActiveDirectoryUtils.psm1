@@ -81,17 +81,42 @@ function FindComputerByEmployeeName {
         [Parameter(Mandatory = $true)]
         [string]$employeeName
     )
+
+    # Ensure name parts are trimmed to avoid leading/trailing spaces issues
+    $nameParts = $employeeName.Trim() -split '\s+'
+    $userFilter = "(&(objectClass=user)"
+
+    if ($nameParts.Count -ge 2) {
+        $givenName = $nameParts[0]
+        $surname = $nameParts[-1]
+        # Check against displayName, GivenName, and sn (surname)
+        $userFilter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
+    } else {
+        # Check against GivenName, sn (surname), and displayName
+        $userFilter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
+    }
+
+    $userFilter += ")"
+
     try {
-        $computers = Get-ADComputer -Filter "Description -like '*$employeeName*'" -Property Name
-        if ($computers -ne $null) {
-            return $computers | ForEach-Object { $_.Name }
+        $adUser = Get-ADUser -LDAPFilter $userFilter -Property DisplayName
+        if ($adUser -ne $null) {
+            # Now search for computer objects with a description that includes the user's display name
+            $userDisplayName = $adUser.DisplayName
+            $computers = Get-ADComputer -Filter "Description -like '*$userDisplayName*'" -Property Name
+            if ($computers -ne $null) {
+                return $computers | ForEach-Object { $_.Name }
+            } else {
+                return "No computers found in AD for the employee"
+            }
         } else {
-            return "No computers found in AD"
+            return "No user found in AD with the specified name"
         }
     } catch {
         return "Error searching AD for computers: $($_.Exception.Message)"
     }
 }
+
 
 # Function to get all AD groups for a given employee
 function GetADEmployeeGroups {
@@ -99,8 +124,25 @@ function GetADEmployeeGroups {
         [Parameter(Mandatory = $true)]
         [string]$employeeName
     )
+
+    # Ensure name parts are trimmed to avoid leading/trailing spaces issues
+    $nameParts = $employeeName.Trim() -split '\s+'
+    $filter = "(&(objectClass=user)"
+
+    if ($nameParts.Count -ge 2) {
+        $givenName = $nameParts[0]
+        $surname = $nameParts[-1]
+        # Check against displayName, GivenName, and sn (surname)
+        $filter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
+    } else {
+        # Check against GivenName, sn (surname), and displayName
+        $filter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
+    }
+
+    $filter += ")"
+
     try {
-        $adUser = Get-ADUser -Filter "Name -like '*$employeeName*'" -Properties MemberOf
+        $adUser = Get-ADUser -LDAPFilter $filter -Properties MemberOf
         if ($adUser -ne $null -and $adUser.MemberOf -ne $null) {
             $groupDns = $adUser.MemberOf
             $groups = $groupDns | ForEach-Object { (Get-ADGroup -Identity $_).Name }
