@@ -100,6 +100,7 @@ List of Office 365 sku's to be able to assign licenses[https://gist.github.com/m
 - 2/16/24 Found issue regarding effective date, second part of the script would not run. Fixed the issue. Also added Litigation hold comment and URL when enabling Lit hold.
 - 2/28/24 Add better error handling for when theres no AD account (Contractor), added function to let you know when there is no E3 license to do lit hold if user has an F3 (will continue checking when a licnese becomes available to do Lit hold, will make a comment), and added the function to move the users AD account to an OU. Also added Block User Signin for Office 365.
 - 3/4/2024 Fixed Lost Mode, Fixed License Removal, Adjusted AD Search for disabling the user.
+- 3/19/2024 Updated how Litigation Hold Status comment was being posted. Now it is a single comment instead of part of general comment. 
 
 
 
