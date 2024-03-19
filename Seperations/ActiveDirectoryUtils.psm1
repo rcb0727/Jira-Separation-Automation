@@ -26,9 +26,11 @@ function GetADEmployeeDetails {
     if ($nameParts.Count -ge 2) {
         $givenName = $nameParts[0]
         $surname = $nameParts[-1]
-        $filter += "(&(GivenName=$givenName)(sn=$surname))"
+        # Include displayName in the filter along with GivenName and sn (surname)
+        $filter += "(|(&(GivenName=$givenName)(sn=$surname))(displayName=*$employeeName*))"
     } else {
-        $filter += "(|(GivenName=$employeeName)(sn=$employeeName))"
+        # Check both GivenName, sn (surname), and displayName
+        $filter += "(|(GivenName=$employeeName)(sn=$employeeName)(displayName=*$employeeName*))"
     }
 
     if ($jobTitle) {
