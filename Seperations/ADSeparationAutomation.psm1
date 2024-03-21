@@ -14,14 +14,18 @@ function Invoke-IssueProcessing {
         $url = "$global:JiraApiBaseUrl/search?jql=$jqlCriteria&startAt=$startAt&maxResults=$maxResults"
         $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers
 
-        foreach ($issue in $response.issues) {
+        f        foreach ($issue in $response.issues) {
             if ($issue) {
                 $details = Get-IssueDetails -issue $issue
                 $employeeName = $details["Employee Name"]
                 $location = $details["Location"] 
                 $department = $details["Department"] 
                 $effectiveDate = $details["Effective Date"]
+                $summary = $issue.fields.summary
                 $disableCommentAdded = $false
+
+                # Update issue summary with effective date
+                $updatedSummary = Update-SummaryWithDate -issueKey $issue.key -summary $summary -effectiveDate $effectiveDate
                 
                 # Fetch AD employee details
                 $adEmployeeDetails = GetADEmployeeDetails -employeeName $employeeName
