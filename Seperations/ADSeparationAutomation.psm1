@@ -43,21 +43,16 @@ function Invoke-IssueProcessing {
                     continue
                 }
 
-                $intuneDeviceDetails = if ($adEmployeeDetails.Email) {
+                               $intuneDeviceDetails = if ($adEmployeeDetails.Email) {
                     $deviceDetails = Get-IntuneDeviceDetails -emailAddress $adEmployeeDetails.Email
-                    
-                    if ($deviceDetails -is [string]) {
-                        # If a string is returned, it means no devices were found or there was an error.
-                        $deviceDetails
-                    } elseif ($deviceDetails -is [array] -and $deviceDetails.Count -gt 0) {
-                        # If an array is returned, process it to create a descriptive string.
-                        $info = $deviceDetails | ForEach-Object {
+                    $deviceDetailsArray = @($deviceDetails)
+                    if ($deviceDetailsArray.Count -gt 0) {
+                        $formattedDetails = $deviceDetailsArray | ForEach-Object {
                             "Device Name: $($_.DeviceName), Serial Number: $($_.SerialNumber)"
                         }
-                        # Join all device information lines into a single string to return.
-                        $info -join "`r`n"
+                        $formattedDetails -join "`n"
                     } else {
-                        "No iOS devices found in Intune for email: $adEmployeeDetails.Email"
+                        "No iOS devices found in Intune for email: $($adEmployeeDetails.Email)"
                     }
                 } else {
                     "No Mobile Device found for $employeeName"
