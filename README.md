@@ -93,6 +93,8 @@ Authenticating Powershell Exchange via Certificate[https://learn.microsoft.com/e
 
 List of Office 365 sku's to be able to assign licenses[https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9](https://gist.github.com/mczerniawski/950e5c102c704d628ce38522ef4ad0f9)
 
+Creating Self Signed Certificate to Authenticate to Exchange without user intervention - https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps
+
 
 **UPDATES**
 
