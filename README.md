@@ -103,7 +103,7 @@ Creating Self Signed Certificate to Authenticate to Exchange without user interv
 - 2/28/24 Add better error handling for when theres no AD account (Contractor), added function to let you know when there is no E3 license to do lit hold if user has an F3 (will continue checking when a licnese becomes available to do Lit hold, will make a comment), and added the function to move the users AD account to an OU. Also added Block User Signin for Office 365.
 - 3/4/2024 Fixed Lost Mode, Fixed License Removal, Adjusted AD Search for disabling the user.
 - 3/19/2024 Updated how Litigation Hold Status comment was being posted. Now it is a single comment instead of part of general comment. Also Updated GetADEmployeeDetails, ADEmployeeGroups, and FindComputerByEmployeeName. Correctly checking Displayname and Given Name for different variations of the name.
-- 5/2/2024 Finally got around to running this with a bat file and realized their was an initial error with Jira API that would come up, but running the script a second time, it worked with no issues. I added a step to test the Jira connection to initialize the API. Also, realized I spelled **Separations** as **Seperations** because I'm special. 
+- 5/1/2024 Finally got around to running this with a bat file and realized their was an initial error with Jira API that would come up, but running the script a second time, it worked with no issues. I added a step to test the Jira connection to initialize the API. Also, realized I spelled **Separations** as **Seperations** because I'm special. 
 
 
 
