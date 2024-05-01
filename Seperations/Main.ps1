@@ -1,11 +1,11 @@
-﻿# Import required modules
-Import-Module 'C:\Scripts\Seperations\MicrosoftGraphAPI.psm1' -Force
-Import-Module 'C:\Scripts\Seperations\ActiveDirectoryUtils.psm1' -Force
-Import-Module 'C:\Scripts\Seperations\ADSeparationAutomation.psm1' -Force
+# Import required modules
+Import-Module 'C:\Scripts\Separations\MicrosoftGraphAPI.psm1' -Force
+Import-Module 'C:\Scripts\Separations\ActiveDirectoryUtils.psm1' -Force
+
 
 
 # Import configuration settings
-$config = Import-PowerShellDataFile -Path 'C:\Scripts\Seperations\Config.psd1'
+$config = Import-PowerShellDataFile -Path 'C:\Scripts\Separations\Config.psd1'
 
 # Use configuration settings
 $clientId = $config.clientId
@@ -26,10 +26,11 @@ $headers = @{
     "Content-Type" = "application/json"
     "Authorization" = $encodedCred
     "X-ExperimentalApi" = "opt-in"
+    
 }
 
 # Import Active Directory Module
 Import-Module ActiveDirectory
 
-
+Import-Module 'C:\Scripts\Separations\ADSeparationAutomation.psm1' -Force
 
