@@ -1,12 +1,31 @@
 # JiraAPI Module
-Import-Module 'C:\Scripts\Seperations\JiraHelperFunctions.psm1' -Force
-Import-Module 'C:\Scripts\Seperations\MicrosoftGraphAPI.psm1' -Force
-Import-Module 'C:\Scripts\Seperations\ActiveDirectoryUtils.psm1' -Force
+Import-Module 'C:\Scripts\Separations\JiraHelperFunctions.psm1' -Force
+Import-Module 'C:\Scripts\Separations\MicrosoftGraphAPI.psm1' -Force
+Import-Module 'C:\Scripts\Separations\ActiveDirectoryUtils.psm1' -Force
 
 # Global Variables
 $global:JiraApiBaseUrl = "Your_Jira_URL/rest/api/3"
 
+function Test-JiraAPIConnection {
+    $url = "$global:JiraApiBaseUrl/myself"  # Make sure this is the complete and correct endpoint
+    try {
+        $response = Invoke-RestMethod -Uri $url -Method Get -Headers $headers
+        Write-Host "API connection successful. Authenticated as user: $($response.displayName)"
+        return $true
+    } catch {
+        Write-Host "Failed to establish API connection: $($_.Exception.Response.StatusCode.Value__) $($_.Exception.Message)"
+        return $false
+    }
+}
+
+
+# Function to invoke issue processing with JIRA API
 function Invoke-IssueProcessing {
+    # Check API connection before processing
+    if (-not (Test-JiraAPIConnection)) {
+        Write-Host "Terminating script due to failed API connection."
+        return
+    }
     $jqlCriteria = "project='$projectKey' AND issuetype = 'Service Request' AND status = 'AD/Exchange' AND 'Request Type' = 'Separation  (AD)' AND resolution = 'Unresolved'"
     $issueList = @()
 
